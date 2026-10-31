@@ -1,195 +1,174 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type Job = {
   id: string;
+  project_name: string;
   status: string;
   prompt: string;
   duration: number;
   style: string;
+  scenes: number;
   output_path?: string;
 };
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function Home() {
+  const [projectName, setProjectName] = useState("My Short Film");
   const [prompt, setPrompt] = useState(
-    "طفل صغير يركض في حقل ضخم عند غروب الشمس، مشهد سينمائي، إضاءة دافئة"
+    "طفل صغير يركض في حقل واسع أثناء غروب الشمس، حركة بطيئة، مشهد سينمائي، إضاءة دافئة"
   );
   const [duration, setDuration] = useState(8);
   const [style, setStyle] = useState("cinematic");
-  const [job, setJob] = useState<Job | null>(null);
+  const [scenes, setScenes] = useState(3);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
+
+  async function loadJobs() {
+    try {
+      const response = await fetch(`${apiBase}/api/jobs`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setJobs(data);
+    } catch (error) {
+      console.error("Failed to load jobs:", error);
+    }
+  }
+
+  useEffect(() => {
+    loadJobs();
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    const response = await fetch(`${apiBase}/api/jobs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        duration,
-        style,
-      }),
-    });
+    try {
+      const response = await fetch(`${apiBase}/api/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: projectName,
+          prompt,
+          duration,
+          style,
+          scenes,
+        }),
+      });
 
-    const data = await response.json();
-    setJob(data);
-    setLoading(false);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to create video");
+      }
+
+      const data = await response.json();
+      setJobs((prev) => [data, ...prev]);
+    } catch (error) {
+      console.error(error);
+      alert((error as Error).message || "Error while creating the video");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <main style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>Short Film Maker</h1>
+    <main className="page-shell">
+      <section className="panel panel-left">
+        <div className="badge">Short Film Maker</div>
+        <h1>أنشئ فيديو قصير من فكرة نصية</h1>
+        <p className="subtitle">
+          أداة سريعة لإنشاء أفكار سينمائية قصيرة وتصدير فيديو محلي للاستخدام الشخصي.
+        </p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label}>وصف المشهد</label>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={5}
-            style={styles.textarea}
-          />
+        <form onSubmit={handleSubmit} className="form-grid">
+          <label>
+            اسم المشروع
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="مثال: Midnight Run"
+            />
+          </label>
 
-          <div style={styles.row}>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>المدة (ثانية)</label>
+          <label>
+            وصف المشهد
+            <textarea
+              rows={5}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="اكتب سيناريوك هنا..."
+            />
+          </label>
+
+          <div className="inline-fields">
+            <label>
+              المدة (ثانية)
               <input
                 type="number"
                 min={3}
-                max={20}
+                max={30}
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
-                style={styles.input}
               />
-            </div>
+            </label>
 
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>الأسلوب</label>
-              <select
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-                style={styles.input}
-              >
-                <option value="cinematic">سينمائي</option>
-                <option value="anime">أنمي</option>
-                <option value="cartoon">رسوم متحركة</option>
-                <option value="realistic">واقعي</option>
-              </select>
-            </div>
+            <label>
+              المشاهد
+              <input
+                type="number"
+                min={1}
+                max={8}
+                value={scenes}
+                onChange={(e) => setScenes(Number(e.target.value))}
+              />
+            </label>
           </div>
 
-          <button disabled={loading} style={styles.button} type="submit">
+          <label>
+            الأسلوب
+            <select value={style} onChange={(e) => setStyle(e.target.value)}>
+              <option value="cinematic">سينمائي</option>
+              <option value="anime">أنمي</option>
+              <option value="cartoon">رسوم متحركة</option>
+              <option value="realistic">واقعي</option>
+            </select>
+          </label>
+
+          <button type="submit" disabled={loading} className="primary-btn">
             {loading ? "جارٍ إنشاء الفيديو..." : "إنشاء الفيديو"}
           </button>
         </form>
+      </section>
 
-        {job && (
-          <div style={styles.result}>
-            <h3>الفيديو النهائي</h3>
-            <p>
-              <strong>الاسم:</strong> {job.id}
-            </p>
-            <p>
-              <strong>الحالة:</strong> {job.status}
-            </p>
+      <aside className="panel panel-right">
+        <div className="header-row">
+          <h2>المشاريع</h2>
+          <button className="ghost-btn" onClick={loadJobs}>تحديث</button>
+        </div>
 
-            {job.output_path && (
-              <video
-                controls
-                src={`${apiBase}${job.output_path}`}
-                style={styles.video}
-              />
-            )}
-          </div>
-        )}
-      </div>
+        <div className="jobs-list">
+          {jobs.length === 0 ? (
+            <div className="empty-state">لا توجد مشاريع بعد.</div>
+          ) : (
+            jobs.map((job) => (
+              <div key={job.id} className="job-card">
+                <div className="job-top">
+                  <span className="job-tag">{job.style}</span>
+                  <span className="job-time">{job.duration}s</span>
+                </div>
+                <h3>{job.project_name}</h3>
+                <p>{job.prompt}</p>
+
+                {job.output_path && (
+                  <video controls src={`${apiBase}${job.output_path}`} />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
     </main>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "linear-gradient(135deg, #0f172a, #111827)",
-    fontFamily: "Arial, sans-serif",
-    color: "#fff",
-    padding: "20px",
-  },
-  card: {
-    width: "100%",
-    maxWidth: "760px",
-    background: "rgba(17, 24, 39, 0.8)",
-    border: "1px solid rgba(148, 163, 184, 0.3)",
-    borderRadius: "20px",
-    padding: "24px",
-    boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
-  },
-  title: {
-    margin: 0,
-    marginBottom: "20px",
-    fontSize: "2rem",
-    textAlign: "center",
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-  },
-  label: {
-    fontWeight: 700,
-    marginBottom: "6px",
-    display: "block",
-  },
-  textarea: {
-    width: "100%",
-    background: "#0f172a",
-    border: "1px solid #334155",
-    color: "#fff",
-    borderRadius: "12px",
-    padding: "12px",
-    resize: "vertical",
-  },
-  row: {
-    display: "flex",
-    gap: "12px",
-  },
-  input: {
-    width: "100%",
-    background: "#0f172a",
-    border: "1px solid #334155",
-    color: "#fff",
-    borderRadius: "12px",
-    padding: "12px",
-  },
-  button: {
-    background: "linear-gradient(135deg, #8b5cf6, #ec4899)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "12px",
-    padding: "14px 18px",
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: "1rem",
-  },
-  result: {
-    marginTop: "28px",
-    borderTop: "1px solid #334155",
-    paddingTop: "20px",
-  },
-  video: {
-    width: "100%",
-    marginTop: "12px",
-    borderRadius: "12px",
-    background: "#020817",
-  },
-};
